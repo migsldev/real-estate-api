@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-The Real Estate Listing and Management Platform is a full-stack application designed to facilitate the browsing, listing, and management of real estate properties. The platform supports two main types of users: property owners/agents and potential renters/buyers. Property owners can list and manage properties, while renters/buyers can browse listings, apply for properties, and manage their favorite properties.
+The Real Estate Listing and Management Platform is a full-stack application designed to facilitate the browsing, listing, and management of real estate properties. The platform supports two main types of users: property owners/agents and potential renters/buyers. Property owners can list and manage properties, while renters/buyers can browse listings, apply for properties, and manage their favorite properties. 
 
 ## Features
 
