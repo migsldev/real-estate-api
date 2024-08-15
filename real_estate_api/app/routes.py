@@ -75,6 +75,9 @@ def update_user(id):
     role = data.get('role')
 
     if username:
+        # Check if the new username already exists and is not the current user's username
+        if User.query.filter_by(username=username).first() and username != user.username:
+            return jsonify({"message": "Username already in use"}), 400
         user.username = username
     if email:
         if User.query.filter_by(email=email).first() and email != user.email:
