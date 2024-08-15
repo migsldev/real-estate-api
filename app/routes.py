@@ -190,3 +190,72 @@ def manage_applications():
     applications = Application.query.filter_by(user_id=current_user['id']).all()
     return jsonify(application_schema.dump(applications, many=True)), 200
 
+# Wishlist Management (Add, Remove)
+@main.route('/wishlist', methods=['POST', 'DELETE'])
+@jwt_required()
+def manage_wishlist():
+    current_user = get_jwt_identity()
+
+    if request.method == 'POST':
+        data = request.get_json()
+        property_id = data.get('property_id')
+
+        # Check if the property exists
+        property = Property.query.get_or_404(property_id)
+
+        new_wishlist_item = Wishlist(
+            user_id=current_user['id'],
+            property_id=property_id
+        )
+
+        db.session.add(new_wishlist_item)
+        db.session.commit()
+
+        return wishlist_schema.jsonify(new_wishlist_item), 201
+
+    if request.method == 'DELETE':
+        data = request.get_json()
+        property_id = data.get('property_id')
+
+        wishlist_item = Wishlist.query.filter_by(user_id=current_user['id'], property_id=property_id).first()
+        if not wishlist_item:
+            return jsonify({"message": "Wishlist item not found"}), 404
+
+        db.session.delete(wishlist_item)
+        db.session.commit()
+
+        return jsonify({"message": "Wishlist item removed"}), 200
+
+@main.route('/applications/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_application(id):
+    current_user = get_jwt_identity()
+
+    # Check if the current user is an agent or admin
+    if current_user['role'] not in ['agent', 'admin']:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    application = Application.query.get_or_404(id)
+    data = request.get_json()
+    status = data.get('status')
+
+    # Validate status
+    if status not in ['approved', 'rejected']:
+        return jsonify({"message": "Invalid status"}), 400
+
+    application.status = status
+    db.session.commit()
+
+    return application_schema.jsonify(application), 200
+
+@main.route('/applications/agent', methods=['GET'])
+@jwt_required()
+def view_applications():
+    current_user = get_jwt_identity()
+
+    # Check if the current user is an agent or admin
+    if current_user['role'] not in ['agent', 'admin']:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    applications = Application.query.all()
+    return jsonify(application_schema.dump(applications, many=True)), 200
