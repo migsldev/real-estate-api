@@ -89,3 +89,104 @@ def update_user(id):
 
     return user_schema.jsonify(user), 200
 
+# Delete User
+@main.route('/register/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_user(id):
+    current_user = get_jwt_identity()
+    
+    # Ensure that only the user themselves or an admin can delete the user
+    if current_user['role'] != 'admin' and current_user['id'] != id:
+        return jsonify({"message": "Unauthorized"}), 403
+    
+    user = User.query.get_or_404(id)
+    db.session.delete(user)
+    db.session.commit()
+
+    return jsonify({"message": "User deleted"}), 200
+
+# Property Management (List, Create, Update, Delete)
+@main.route('/properties', methods=['GET', 'POST'])
+@jwt_required()
+def manage_properties():
+    current_user = get_jwt_identity()
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        title = data.get('title')
+        description = data.get('description')
+        price = data.get('price')
+        location = data.get('location')
+
+        new_property = Property(
+            title=title,
+            description=description,
+            price=price,
+            location=location,
+            listed_by=current_user['id']
+        )
+
+        db.session.add(new_property)
+        db.session.commit()
+
+        return property_schema.jsonify(new_property), 201
+
+    properties = Property.query.all()
+    return jsonify(property_schema.dump(properties, many=True)), 200
+
+@main.route('/properties/<int:id>', methods=['PUT', 'DELETE'])
+@jwt_required()
+def modify_property(id):
+    property = Property.query.get_or_404(id)
+    current_user = get_jwt_identity()
+
+    if request.method == 'PUT':
+        data = request.get_json()
+
+        if property.listed_by != current_user['id']:
+            return jsonify({"message": "Unauthorized to update this property"}), 403
+
+        property.title = data.get('title', property.title)
+        property.description = data.get('description', property.description)
+        property.price = data.get('price', property.price)
+        property.location = data.get('location', property.location)
+
+        db.session.commit()
+
+        return property_schema.jsonify(property), 200
+
+    if request.method == 'DELETE':
+        if property.listed_by != current_user['id']:
+            return jsonify({"message": "Unauthorized to delete this property"}), 403
+
+        db.session.delete(property)
+        db.session.commit()
+
+        return jsonify({"message": "Property deleted"}), 200
+
+# Application Management (Submit, View)
+@main.route('/applications', methods=['POST', 'GET'])
+@jwt_required()
+def manage_applications():
+    current_user = get_jwt_identity()
+
+    if request.method == 'POST':
+        data = request.get_json()
+        property_id = data.get('property_id')
+        
+        # Check if the property exists
+        property = Property.query.get_or_404(property_id)
+
+        new_application = Application(
+            user_id=current_user['id'],
+            property_id=property_id
+        )
+
+        db.session.add(new_application)
+        db.session.commit()
+
+        return application_schema.jsonify(new_application), 201
+
+    applications = Application.query.filter_by(user_id=current_user['id']).all()
+    return jsonify(application_schema.dump(applications, many=True)), 200
+
