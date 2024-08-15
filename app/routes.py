@@ -56,3 +56,36 @@ def get_user(id):
     user = User.query.get_or_404(id)
     return user_schema.jsonify(user), 200
 
+# Update User Information
+@main.route('/register/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_user(id):
+    current_user = get_jwt_identity()
+    
+    # Ensure that only the user themselves or an admin can update the user information
+    if current_user['role'] != 'admin' and current_user['id'] != id:
+        return jsonify({"message": "Unauthorized"}), 403
+    
+    user = User.query.get_or_404(id)
+    data = request.get_json()
+
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    role = data.get('role')
+
+    if username:
+        user.username = username
+    if email:
+        if User.query.filter_by(email=email).first() and email != user.email:
+            return jsonify({"message": "Email already in use"}), 400
+        user.email = email
+    if password:
+        user.password = generate_password_hash(password)
+    if role:
+        user.role = role
+
+    db.session.commit()
+
+    return user_schema.jsonify(user), 200
+
