@@ -43,3 +43,16 @@ def login():
     access_token = create_access_token(identity={'id': user.id, 'username': user.username, 'role': user.role})
     return jsonify({"access_token": access_token}), 200
 
+# Get User by ID
+@main.route('/register/<int:id>', methods=['GET'])
+@jwt_required()
+def get_user(id):
+    current_user = get_jwt_identity()
+
+    # Ensure that only the user themselves or an admin can view the user information
+    if current_user['role'] != 'admin' and current_user['id'] != id:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    user = User.query.get_or_404(id)
+    return user_schema.jsonify(user), 200
+
