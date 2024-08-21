@@ -194,21 +194,39 @@ def manage_applications():
     return jsonify(application_schema.dump(applications, many=True)), 200
 
 # Wishlist Management (Add, Remove)
-@main.route('/wishlist', methods=['POST', 'DELETE'])
+@main.route('/wishlist', methods=['GET', 'POST', 'DELETE'])
 @jwt_required()
 def manage_wishlist():
     current_user = get_jwt_identity()
+
+    if request.method == 'GET':
+        # Retrieve all wishlist items for the current user
+        wishlist_items = db.session.query(Wishlist, Property).join(Property, Wishlist.property_id == Property.id).filter(Wishlist.user_id == current_user['id']).all()
+
+        # Prepare the data to return with both wishlist and property details
+        result = []
+        for wishlist_item, property in wishlist_items:
+            result.append({
+            "wishlist_id": wishlist_item.id,
+            "property_id": property.id,
+            "property_title": property.title,
+            "property_description": property.description,
+            "property_price": property.price,
+            "property_location": property.location
+            })
+
+        return jsonify(result), 200
 
     if request.method == 'POST':
         data = request.get_json()
         property_id = data.get('property_id')
 
-        # Check if the property exists
+    # Check if the property exists
         property = Property.query.get_or_404(property_id)
 
         new_wishlist_item = Wishlist(
-            user_id=current_user['id'],
-            property_id=property_id
+        user_id=current_user['id'],
+        property_id=property_id
         )
 
         db.session.add(new_wishlist_item)
@@ -228,7 +246,6 @@ def manage_wishlist():
         db.session.commit()
 
         return jsonify({"message": "Wishlist item removed"}), 200
-
 @main.route('/applications/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_application(id):
