@@ -113,8 +113,19 @@ def delete_user(id):
 @jwt_required()
 def manage_properties():
     current_user = get_jwt_identity()
-    
+
     if request.method == 'POST':
+        if current_user['role'] == 'buyer':
+            # Check if the buyer has already created a property
+            existing_properties = Property.query.filter_by(listed_by=current_user['id']).count()
+            if existing_properties == 0:
+                # Allow the buyer to create their first property
+                return jsonify({"message": "Buyers cannot list multiple properties"}), 403
+            else:
+                pass
+        elif current_user['role'] != 'agent':
+            return jsonify({"message": "Only property owners or agents can list properties"}), 403
+
         data = request.get_json()
         title = data.get('title')
         description = data.get('description')
@@ -137,6 +148,7 @@ def manage_properties():
     properties = Property.query.all()
     return jsonify(property_schema.dump(properties, many=True)), 200
 
+
 @main.route('/properties/<int:id>', methods=['PUT', 'DELETE'])
 @jwt_required()
 def modify_property(id):
@@ -144,11 +156,10 @@ def modify_property(id):
     current_user = get_jwt_identity()
 
     if request.method == 'PUT':
-        data = request.get_json()
-
         if property.listed_by != current_user['id']:
             return jsonify({"message": "Unauthorized to update this property"}), 403
 
+        data = request.get_json()
         property.title = data.get('title', property.title)
         property.description = data.get('description', property.description)
         property.price = data.get('price', property.price)
@@ -167,18 +178,23 @@ def modify_property(id):
 
         return jsonify({"message": "Property deleted"}), 200
 
-# Application Management (Submit, View)
-@main.route('/applications', methods=['POST', 'GET'])
+@main.route('/applications', methods=['POST'])
 @jwt_required()
 def manage_applications():
     current_user = get_jwt_identity()
 
     if request.method == 'POST':
+        if current_user['role'] == 'property_owner' or current_user['role'] == 'agent':
+            return jsonify({"message": "Unauthorized to apply for properties"}), 403
+
         data = request.get_json()
         property_id = data.get('property_id')
-        
+
         # Check if the property exists
         property = Property.query.get_or_404(property_id)
+
+        if property.listed_by == current_user['id']:
+            return jsonify({"message": "Cannot apply to your own property"}), 403
 
         new_application = Application(
             user_id=current_user['id'],
@@ -192,41 +208,25 @@ def manage_applications():
 
     applications = Application.query.filter_by(user_id=current_user['id']).all()
     return jsonify(application_schema.dump(applications, many=True)), 200
-
 # Wishlist Management (Add, Remove)
-@main.route('/wishlist', methods=['GET', 'POST', 'DELETE'])
+@main.route('/wishlist', methods=['POST', 'DELETE'])
 @jwt_required()
 def manage_wishlist():
     current_user = get_jwt_identity()
 
-    if request.method == 'GET':
-        # Retrieve all wishlist items for the current user
-        wishlist_items = db.session.query(Wishlist, Property).join(Property, Wishlist.property_id == Property.id).filter(Wishlist.user_id == current_user['id']).all()
-
-        # Prepare the data to return with both wishlist and property details
-        result = []
-        for wishlist_item, property in wishlist_items:
-            result.append({
-            "wishlist_id": wishlist_item.id,
-            "property_id": property.id,
-            "property_title": property.title,
-            "property_description": property.description,
-            "property_price": property.price,
-            "property_location": property.location
-            })
-
-        return jsonify(result), 200
+    if current_user['role'] != 'buyer':
+        return jsonify({"message": "Only buyers can manage a wishlist"}), 403
 
     if request.method == 'POST':
         data = request.get_json()
         property_id = data.get('property_id')
 
-    # Check if the property exists
+        # Check if the property exists
         property = Property.query.get_or_404(property_id)
 
         new_wishlist_item = Wishlist(
-        user_id=current_user['id'],
-        property_id=property_id
+            user_id=current_user['id'],
+            property_id=property_id
         )
 
         db.session.add(new_wishlist_item)
@@ -246,6 +246,7 @@ def manage_wishlist():
         db.session.commit()
 
         return jsonify({"message": "Wishlist item removed"}), 200
+
 @main.route('/applications/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_application(id):
@@ -259,9 +260,9 @@ def update_application(id):
     data = request.get_json()
     status = data.get('status')
 
-    # Validate status
-    if status not in ['approved', 'rejected']:
-        return jsonify({"message": "Invalid status"}), 400
+    # Validate the status
+    if status not in ['Pending', 'Accepted', 'Rejected']:
+        return jsonify({"message": "Invalid status value"}), 400
 
     application.status = status
     db.session.commit()
